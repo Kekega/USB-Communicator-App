@@ -1,5 +1,6 @@
 package com.example.usbcommunicator
 
+import AccessoryEngine
 import android.content.Intent
 import android.graphics.Color
 import android.hardware.usb.UsbAccessory
@@ -7,7 +8,6 @@ import android.os.Bundle
 import android.widget.Button
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
-import com.example.usbcommunicator.AccessoryEngine.IEngineCallback
 
 
 class MainActivity : AppCompatActivity() {
@@ -40,17 +40,25 @@ class MainActivity : AppCompatActivity() {
         onNewIntent(intent)
     }
 
-    private val mCallback: IEngineCallback = object : IEngineCallback {
+    private val mCallback: AccessoryEngine.IEngineCallback = object :
+        AccessoryEngine.IEngineCallback {
+        override fun onConnectionEstablished() {
+            val tv = findViewById<TextView>(R.id.textView)
+            tv.text = "Connected"
+            tv.setTextColor(Color.GREEN)
+        }
+
         override fun onDeviceDisconnected() {
             val tv = findViewById<TextView>(R.id.textView)
             tv.text = "Device disconnected"
             tv.setTextColor(Color.RED);
         }
 
-        override fun onConnectionEstablished(mAccessory: UsbAccessory) {
-            val tv = findViewById<TextView>(R.id.textView)
-            tv.text = "Connected to ${mAccessory.model}"
-            tv.setTextColor(Color.GREEN)
+        override fun onDataReceived(data: ByteArray?, num: Int) {
+            val tv = findViewById<TextView>(R.id.textView2)
+            if (data != null) {
+                tv.text = data.decodeToString()
+            }
         }
     }
 }
