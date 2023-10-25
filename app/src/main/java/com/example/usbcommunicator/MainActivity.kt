@@ -10,8 +10,7 @@ import androidx.appcompat.app.AppCompatActivity
 
 
 class MainActivity : AppCompatActivity() {
-    private lateinit var mAccessoryEngine: AccessoryEngine;
-    private lateinit var mDeviceEngine: DeviceEngine;
+    private lateinit var usbEngine: UsbEngine;
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -19,24 +18,19 @@ class MainActivity : AppCompatActivity() {
         onNewIntent(intent);
 
         findViewById<Button>(R.id.button0).setOnClickListener {
-            mAccessoryEngine.write(byteArrayOf(0x0))
-            mDeviceEngine.write("0".toByteArray())
+            usbEngine.write("0".toByteArray())
         }
         findViewById<Button>(R.id.button1).setOnClickListener {
-            mAccessoryEngine.write(byteArrayOf(0x1))
-            mDeviceEngine.write("1".toByteArray())
+            usbEngine.write("1".toByteArray())
+
         }
     }
 
     override fun onNewIntent(intent: Intent?) {
-        if (!::mAccessoryEngine.isInitialized) {
-            mAccessoryEngine = AccessoryEngine(applicationContext, mCallback)
+        if (!::usbEngine.isInitialized) {
+            usbEngine = UsbEngine(applicationContext, mCallback)
         }
-        if (!::mDeviceEngine.isInitialized) {
-            mDeviceEngine = DeviceEngine(applicationContext, mCallback)
-        }
-        mDeviceEngine.onIntent(intent)
-        mAccessoryEngine.onIntent(intent)
+        usbEngine.onNewIntent(intent)
         super.onNewIntent(intent)
     }
 
@@ -46,17 +40,16 @@ class MainActivity : AppCompatActivity() {
         onNewIntent(intent)
     }
 
-    private val mCallback: IUsbEngineCallback = object :
-        IUsbEngineCallback {
+    private val mCallback: IUsbCallback = object: IUsbCallback  {
         override fun onConnectionEstablished() {
             val tv = findViewById<TextView>(R.id.textView)
-            tv.text = "Connected"
+            tv.text = usbEngine.connectionStatus()
             tv.setTextColor(Color.GREEN)
         }
 
         override fun onDeviceDisconnected() {
             val tv = findViewById<TextView>(R.id.textView)
-            tv.text = "Device disconnected"
+            tv.text = usbEngine.connectionStatus()
             tv.setTextColor(Color.RED);
         }
 

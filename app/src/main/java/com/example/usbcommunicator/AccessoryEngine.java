@@ -20,22 +20,20 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.Objects;
 
 public final class AccessoryEngine {
-    private final UsbManager mUsbManager;
+    private final UsbManager usbManager;
     private final String componentName = "AccessoryEngine";
-    private volatile boolean mAccessoryConnected;
-    private ParcelFileDescriptor mParcelFileDescriptor;
-    private FileInputStream mInputStream;
-    private FileOutputStream mOutputStream;
-    private final BroadcastReceiver mPermissionReceiver;
-    private final Runnable mAccessoryReader = () -> {
+    public volatile boolean isConnected;
+    private ParcelFileDescriptor pd;
+    private FileInputStream inputStream;
+    private FileOutputStream outputStream;
+    private final Runnable accessoryReader = () -> {
         byte[] buf = new byte[1024];
 
         while (true) {
             try {
-                int read = AccessoryEngine.this.mInputStream.read(buf);
+                int read = AccessoryEngine.this.inputStream.read(buf);
                 AccessoryEngine.this.mCallback.onDataReceived(buf, read);
             } catch (Exception exc) {
                 Log.d(AccessoryEngine.this.componentName, "run:" + exc.getMessage());
@@ -44,122 +42,91 @@ public final class AccessoryEngine {
             }
         }
 
-        if (AccessoryEngine.this.mParcelFileDescriptor != null) {
-            try {
-                AccessoryEngine.this.mParcelFileDescriptor.close();
-            } catch (IOException exc) {
-                Log.d(AccessoryEngine.this.componentName, "run: Unable to close ParcelFD");
-            }
-        }
-
-        if (AccessoryEngine.this.mInputStream != null) {
-            try {
-                AccessoryEngine.this.mInputStream.close();
-            } catch (IOException exc) {
-                Log.d(AccessoryEngine.this.componentName, "run: Unable to close InputStream");
-            }
-        }
-
-        if (AccessoryEngine.this.mOutputStream != null) {
-            try {
-                AccessoryEngine.this.mOutputStream.close();
-            } catch (IOException var3) {
-                Log.d(AccessoryEngine.this.componentName, "run: Unable to close OutputStream");
-            }
-        }
-
-        AccessoryEngine.this.mAccessoryConnected = false;
+        disconnect();
     };
     private final Context mContext;
-    private final IUsbEngineCallback mCallback;
+    private final IUsbCallback mCallback;
 
-    public AccessoryEngine(@NotNull Context mContext, @NotNull IUsbEngineCallback mCallback) {
+    public AccessoryEngine(@NotNull Context mContext, @NotNull IUsbCallback mCallback) {
         super();
         this.mContext = mContext;
         this.mCallback = mCallback;
-        this.mUsbManager = (UsbManager) this.mContext.getSystemService(Context.USB_SERVICE);
-
-        BroadcastReceiver mDetachedReceiver = new BroadcastReceiver() {
-            public void onReceive(@NotNull Context context, @NotNull Intent intent) {
-                if (Objects.requireNonNull(intent.getAction()).equals(UsbManager.ACTION_USB_ACCESSORY_DETACHED)) {
-                    AccessoryEngine.this.mCallback.onDeviceDisconnected();
-                }
-            }
-        };
-        this.mContext.registerReceiver(mDetachedReceiver, new IntentFilter("android.hardware.usb.action.USB_ACCESSORY_DETACHED"));
-
-        this.mPermissionReceiver = new BroadcastReceiver() {
-            public void onReceive(@NotNull Context context, @NotNull Intent intent) {
-                AccessoryEngine.this.mContext.unregisterReceiver((BroadcastReceiver) this);
-                if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
-                    Log.d(AccessoryEngine.this.componentName, "USB Permission granted! Let's try to connect.");
-                    AccessoryEngine.this.connectAccessory();
-                } else {
-                    Log.d(AccessoryEngine.this.componentName, "Permission denied!");
-                    Toast.makeText(AccessoryEngine.this.mContext, (CharSequence) "Permission denied! Please give permission!", Toast.LENGTH_SHORT).show();
-                }
-
-            }
-        };
+        this.usbManager = (UsbManager) this.mContext.getSystemService(Context.USB_SERVICE);
     }
 
-    public final void onIntent(@Nullable Intent intent) {
-        this.connectAccessory();
-    }
+    public void disconnect() {
+        isConnected = false;
 
-    public final void write(@NotNull byte[] data) {
-        if (!this.mAccessoryConnected || this.mOutputStream == null) {
-            Log.d(this.componentName, "Unable to write: not connected.");
-            Toast.makeText(this.mContext, (CharSequence) "Not connected!", Toast.LENGTH_SHORT).show();
-            return;
-        } else {
+        if (pd != null) {
             try {
-                this.mOutputStream.write(data);
-                Log.d(this.componentName, "write: Data send: " + Arrays.toString(data));
+                pd.close();
             } catch (IOException exc) {
-                Log.d(this.componentName, "write: could not send data");
+                Log.d(componentName, "Disconnect: unable to close ParcelFD");
             }
+        }
 
+        if (inputStream != null) {
+            try {
+                inputStream.close();
+            } catch (IOException exc) {
+                Log.d(componentName, "Disconnect: unable to close InputStream");
+            }
+        }
+
+        if (outputStream != null) {
+            try {
+                outputStream.close();
+            } catch (IOException var3) {
+                Log.d(componentName, "Disconnect: unable to close OutputStream");
+            }
+        }
+    }
+
+    public void write(@NotNull byte[] data) {
+        try {
+            this.outputStream.write(data);
+            Log.d(this.componentName, "Data written" + Arrays.toString(data));
+        } catch (IOException exc) {
+            Log.d(this.componentName, "Could not write: " + exc.getMessage());
         }
     }
 
     @SuppressLint("UnspecifiedRegisterReceiverFlag")
-    private final void connectAccessory() {
-        if (this.mAccessoryConnected && this.mOutputStream != null && this.mInputStream != null) {
+    public void maybeConnect() {
+        if (this.isConnected && this.outputStream != null && this.inputStream != null) {
             Log.d(this.componentName, "Already connected!");
             return;
         }
 
         Log.d(this.componentName, "Discovering accessories...");
-        UsbAccessory[] accessoryList = this.mUsbManager.getAccessoryList();
+        UsbAccessory[] accessoryList = this.usbManager.getAccessoryList();
         if (accessoryList == null || accessoryList.length == 0) {
             Log.d(this.componentName, "No accessories found.");
             return;
         }
 
         UsbAccessory mAccessory = accessoryList[0];
-        if (!this.mUsbManager.hasPermission(mAccessory)) {
+        if (!this.usbManager.hasPermission(mAccessory)) {
             Log.d(this.componentName, "Permission missing, requesting...");
-            this.mContext.registerReceiver(this.mPermissionReceiver, new IntentFilter("com.example.usbcommunicator.USB_PERMISSION"));
             PendingIntent pi = PendingIntent.getBroadcast(this.mContext, 0, new Intent("com.example.usbcommunicator.USB_PERMISSION"), 0);
-            this.mUsbManager.requestPermission(mAccessory, pi);
+            this.usbManager.requestPermission(mAccessory, pi);
             return;
         }
 
         Log.d(this.componentName, "Permission available, connecting...");
-        this.mParcelFileDescriptor = this.mUsbManager.openAccessory(mAccessory);
-        if (this.mParcelFileDescriptor == null) {
+        this.pd = this.usbManager.openAccessory(mAccessory);
+        if (this.pd == null) {
             Log.e(this.componentName, "Unable to open accessory!");
             return;
         }
 
-        ParcelFileDescriptor pd = this.mParcelFileDescriptor;
+        ParcelFileDescriptor pd = this.pd;
         FileDescriptor mFileDescriptor = pd.getFileDescriptor();
-        this.mInputStream = new FileInputStream(mFileDescriptor);
-        this.mOutputStream = new FileOutputStream(mFileDescriptor);
-        this.mAccessoryConnected = true;
+        this.inputStream = new FileInputStream(mFileDescriptor);
+        this.outputStream = new FileOutputStream(mFileDescriptor);
+        this.isConnected = true;
         this.mCallback.onConnectionEstablished();
-        Thread sAccessoryThread = new Thread(this.mAccessoryReader, "Reader Thread");
+        Thread sAccessoryThread = new Thread(this.accessoryReader, "Reader Thread");
         sAccessoryThread.start();
         Log.d(this.componentName, "Connection established.");
     }

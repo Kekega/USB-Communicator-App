@@ -4,6 +4,7 @@
 
     <uses-feature android:name="android.hardware.usb.accessory" />
     <uses-feature android:name="android.hardware.usb.host" />
+
     <uses-permission android:name="android.permission.ACCESSORY_FRAMEWORK" />
     <uses-permission android:name="android.permission.USB_PERMISSION" />
 
@@ -30,10 +31,14 @@
 
             <intent-filter>
                 <action android:name="android.hardware.usb.action.USB_ACCESSORY_ATTACHED" />
+                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
             </intent-filter>
 
-            <meta-data android:name="android.hardware.usb.action.USB_ACCESSORY_ATTACHED"
+            <meta-data
+                android:name="android.hardware.usb.action.USB_ACCESSORY_ATTACHED"
                 android:resource="@xml/accessory_filter" />
+            <meta-data android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
+                android:resource="@xml/device_filter" />
         </activity>
     </application>
 
