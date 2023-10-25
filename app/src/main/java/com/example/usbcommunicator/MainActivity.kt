@@ -1,17 +1,17 @@
 package com.example.usbcommunicator
 
-import AccessoryEngine
 import android.content.Intent
 import android.graphics.Color
-import android.hardware.usb.UsbAccessory
 import android.os.Bundle
+import android.util.Log
 import android.widget.Button
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 
 
 class MainActivity : AppCompatActivity() {
-    private lateinit var mEngine: AccessoryEngine;
+    private lateinit var mAccessoryEngine: AccessoryEngine;
+    private lateinit var mDeviceEngine: DeviceEngine;
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -19,18 +19,24 @@ class MainActivity : AppCompatActivity() {
         onNewIntent(intent);
 
         findViewById<Button>(R.id.button0).setOnClickListener {
-            mEngine.write(byteArrayOf(0x0))
+            mAccessoryEngine.write(byteArrayOf(0x0))
+            mDeviceEngine.write("0".toByteArray())
         }
         findViewById<Button>(R.id.button1).setOnClickListener {
-            mEngine.write(byteArrayOf(0x1))
+            mAccessoryEngine.write(byteArrayOf(0x1))
+            mDeviceEngine.write("1".toByteArray())
         }
     }
 
     override fun onNewIntent(intent: Intent?) {
-        if (!::mEngine.isInitialized) {
-            mEngine = AccessoryEngine(applicationContext, mCallback)
+        if (!::mAccessoryEngine.isInitialized) {
+            mAccessoryEngine = AccessoryEngine(applicationContext, mCallback)
         }
-        mEngine.onNewIntent(intent)
+        if (!::mDeviceEngine.isInitialized) {
+            mDeviceEngine = DeviceEngine(applicationContext, mCallback)
+        }
+        mDeviceEngine.onIntent(intent)
+        mAccessoryEngine.onIntent(intent)
         super.onNewIntent(intent)
     }
 
@@ -40,8 +46,8 @@ class MainActivity : AppCompatActivity() {
         onNewIntent(intent)
     }
 
-    private val mCallback: AccessoryEngine.IEngineCallback = object :
-        AccessoryEngine.IEngineCallback {
+    private val mCallback: IUsbEngineCallback = object :
+        IUsbEngineCallback {
         override fun onConnectionEstablished() {
             val tv = findViewById<TextView>(R.id.textView)
             tv.text = "Connected"
@@ -57,7 +63,12 @@ class MainActivity : AppCompatActivity() {
         override fun onDataReceived(data: ByteArray?, num: Int) {
             val tv = findViewById<TextView>(R.id.textView2)
             if (data != null) {
-                tv.text = data.decodeToString()
+                Log.d("App", data.decodeToString(endIndex = num))
+                var text = data.decodeToString(endIndex = num)
+                if (text.length > 10){
+                    text = text.substring(0, 10) + "..."
+                }
+                tv.text = text
             }
         }
     }
