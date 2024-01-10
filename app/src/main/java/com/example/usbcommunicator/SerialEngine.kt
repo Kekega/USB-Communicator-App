@@ -51,7 +51,7 @@ class SerialEngine(private val mContext: Context, private val mCallback: IUsbCal
                 mContext,
                 0,
                 Intent("com.example.usbcommunicator.USB_PERMISSION"),
-                0
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
             )
             mUsbManager.requestPermission(device, pi)
             return
@@ -63,12 +63,12 @@ class SerialEngine(private val mContext: Context, private val mCallback: IUsbCal
             return
         }
         serialDevice = UsbSerialDevice.createUsbSerialDevice(device, connection)
-        serialDevice.open()
-        serialDevice.setBaudRate(9600)
-        serialDevice.setDataBits(UsbSerialInterface.DATA_BITS_8)
-        serialDevice.setStopBits(UsbSerialInterface.STOP_BITS_1)
-        serialDevice.setParity(UsbSerialInterface.PARITY_NONE)
-        serialDevice.setFlowControl(UsbSerialInterface.FLOW_CONTROL_OFF)
+        serialDevice?.open()
+        serialDevice?.setBaudRate(9600)
+        serialDevice?.setDataBits(UsbSerialInterface.DATA_BITS_8)
+        serialDevice?.setStopBits(UsbSerialInterface.STOP_BITS_1)
+        serialDevice?.setParity(UsbSerialInterface.PARITY_NONE)
+        serialDevice?.setFlowControl(UsbSerialInterface.FLOW_CONTROL_OFF)
         isConnected = true
         mCallback.onConnectionEstablished()
         Log.d(componentName, "Connection established.")
